@@ -50,7 +50,7 @@ namespace SignalR.Orleans.Core
         {
             foreach (var server in _state.Servers.Where(server => server.Value < DateTime.UtcNow.AddMinutes(-10)))
             {
-                // dispatch server disconnected
+                //todo: dispatch server disconnected
                 _state.Servers.Remove(server.Key);
             }
 
