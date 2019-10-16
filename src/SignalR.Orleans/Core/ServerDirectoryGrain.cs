@@ -10,6 +10,7 @@ namespace SignalR.Orleans.Core
     {
         Task Register(Guid serverId);
         Task HeartBeat(Guid serverId);
+        Task Dispose();
     }
 
     public class ServerDirectoryState
@@ -26,7 +27,7 @@ namespace SignalR.Orleans.Core
             RegisterTimer(
                ValidateAndCleanUp,
                _state,
-               TimeSpan.FromMinutes(1), 
+               TimeSpan.FromMinutes(1),
                TimeSpan.FromMinutes(1));
 
             await base.OnActivateAsync();
@@ -46,9 +47,22 @@ namespace SignalR.Orleans.Core
             return Task.CompletedTask;
         }
 
+        public Task Dispose()
+        {
+            foreach (var server in _state.Servers)
+            {
+               var serverDisconnectedStream = _streamProvider.GetStream<string>(Constants.SERVER_DISCONNECTED, server.Key);
+
+                //todo: dispatch server disconnected
+            }
+            _state.Servers = new Dictionary<Guid, DateTime>();
+            DeactivateOnIdle();
+            return Task.CompletedTask;
+        }
+
         private async Task ValidateAndCleanUp(object serverDirectory)
         {
-            foreach (var server in _state.Servers.Where(server => server.Value < DateTime.UtcNow.AddMinutes(-10)))
+            foreach (var server in _state.Servers.Where(server => server.Value < DateTime.UtcNow.AddMinutes(-1)))
             {
                 //todo: dispatch server disconnected
                 _state.Servers.Remove(server.Key);

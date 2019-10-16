@@ -40,7 +40,7 @@ namespace SignalR.Orleans
             _clusterClientProvider = clusterClientProvider;
             _ = EnsureStreamSetup();
 
-            _timer = new Timer(_ =>Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(10));
+            _timer = new Timer(_ =>Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(80));
         }
 
         private Task HeartbeatCheck()
@@ -272,8 +272,10 @@ namespace SignalR.Orleans
                 toUnsubscribe.AddRange(subscriptions.Select(s => s.UnsubscribeAsync()));
             }
 
-            Task.WaitAll(toUnsubscribe.ToArray());
-            //todo: remove 
+            var client = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
+            toUnsubscribe.Add(client.Dispose());
+
+           Task.WaitAll(toUnsubscribe.ToArray());
 
             _timer?.Dispose();
         }
