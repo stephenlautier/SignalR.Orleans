@@ -2,15 +2,17 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Orleans;
+using Orleans.Providers;
+using Orleans.Streams;
 
 namespace SignalR.Orleans.Core
 {
     public interface IServerDirectoryGrain : IGrainWithIntegerKey
     {
-        Task Register(Guid serverId);
         Task HeartBeat(Guid serverId);
-        Task Dispose();
+        Task Dispose(Guid serverId);
     }
 
     public class ServerDirectoryState
@@ -18,57 +20,64 @@ namespace SignalR.Orleans.Core
         public Dictionary<Guid, DateTime> Servers { get; set; } = new Dictionary<Guid, DateTime>();
     }
 
-    public class ServerDirectoryGrain : Grain, IServerDirectoryGrain
+    [StorageProvider(ProviderName = Constants.STORAGE_PROVIDER)]
+    public class ServerDirectoryGrain : Grain<ServerDirectoryState>, IServerDirectoryGrain
     {
-        private readonly ServerDirectoryState _state = new ServerDirectoryState();
+        private IStreamProvider _streamProvider;
+
+        private readonly ILogger<ServerDirectoryGrain> _logger;
+
+        public ServerDirectoryGrain(ILogger<ServerDirectoryGrain> logger)
+        {
+            _logger = logger;
+        }
 
         public override async Task OnActivateAsync()
         {
+            _streamProvider = GetStreamProvider(Constants.STREAM_PROVIDER);
+
+            _logger.LogInformation("Available servers {serverIds} ", string.Join(", ", State.Servers));
+
             RegisterTimer(
                ValidateAndCleanUp,
-               _state,
-               TimeSpan.FromMinutes(1),
-               TimeSpan.FromMinutes(1));
+               State,
+               TimeSpan.FromSeconds(15),
+               TimeSpan.FromSeconds(15));
 
             await base.OnActivateAsync();
         }
 
-        public Task Register(Guid serverId)
-        {
-            if (!_state.Servers.ContainsKey(serverId))
-                _state.Servers.Add(serverId, DateTime.UtcNow);
-
-            return Task.CompletedTask;
-        }
-
         public Task HeartBeat(Guid serverId)
         {
-            _state.Servers[serverId] = DateTime.UtcNow;
-            return Task.CompletedTask;
+            State.Servers[serverId] = DateTime.UtcNow;
+            return WriteStateAsync();
         }
 
-        public Task Dispose()
+        public async Task Dispose(Guid serverId)
         {
-            foreach (var server in _state.Servers)
-            {
-               var serverDisconnectedStream = _streamProvider.GetStream<string>(Constants.SERVER_DISCONNECTED, server.Key);
+            if (!State.Servers.ContainsKey(serverId))
+                return;
 
-                //todo: dispatch server disconnected
-            }
-            _state.Servers = new Dictionary<Guid, DateTime>();
-            DeactivateOnIdle();
-            return Task.CompletedTask;
+            _logger.LogWarning("Disposing and removing server {serverId}", serverId);
+            State.Servers.Remove(serverId);
+            await WriteStateAsync();
         }
 
         private async Task ValidateAndCleanUp(object serverDirectory)
         {
-            foreach (var server in _state.Servers.Where(server => server.Value < DateTime.UtcNow.AddMinutes(-1)))
+            var expiredServers = State.Servers.Where(server => server.Value < DateTime.UtcNow.AddMinutes(-0.5)).ToList();
+            foreach (var server in expiredServers)
             {
-                //todo: dispatch server disconnected
-                _state.Servers.Remove(server.Key);
+                var serverDisconnectedStream = _streamProvider.GetStream<Guid>(server.Key, Constants.SERVER_DISCONNECTED);
+
+                _logger.LogWarning("Removing server {serverId} due to inactivity {lastUpdatedDate}", server.Key, server.Value);
+                await serverDisconnectedStream.OnNextAsync(server.Key);
+                State.Servers.Remove(server.Key);
             }
 
-            await Task.FromResult(_state);
+            if (expiredServers.Count > 0)
+                await WriteStateAsync();
+
         }
     }
 }

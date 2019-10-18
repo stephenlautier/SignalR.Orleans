@@ -40,7 +40,7 @@ namespace SignalR.Orleans
             _clusterClientProvider = clusterClientProvider;
             _ = EnsureStreamSetup();
 
-            _timer = new Timer(_ =>Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(80));
+            _timer = new Timer(_ => Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(10));
         }
 
         private Task HeartbeatCheck()
@@ -83,9 +83,6 @@ namespace SignalR.Orleans
             };
 
             await Task.WhenAll(subscribeTasks);
-
-            var client = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
-            await client.Register(_serverId);
 
             _logger.LogInformation("Initialized complete: Orleans HubLifetimeManager {hubName} (serverId: {serverId})", _hubName, _serverId);
         }
@@ -272,10 +269,10 @@ namespace SignalR.Orleans
                 toUnsubscribe.AddRange(subscriptions.Select(s => s.UnsubscribeAsync()));
             }
 
-            var client = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
-            toUnsubscribe.Add(client.Dispose());
+            var serverDirectoryGrain = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
+            toUnsubscribe.Add(serverDirectoryGrain.Dispose(_serverId));
 
-           Task.WaitAll(toUnsubscribe.ToArray());
+            Task.WaitAll(toUnsubscribe.ToArray());
 
             _timer?.Dispose();
         }
