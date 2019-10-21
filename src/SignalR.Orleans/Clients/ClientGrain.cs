@@ -47,7 +47,7 @@ namespace SignalR.Orleans.Clients
                 return;
 
             _serverStream = _streamProvider.GetStream<ClientMessage>(State.ServerId, Constants.SERVERS_STREAM);
-            _serverDisconnectedStream = _streamProvider.GetStream<Guid>(State.ServerId, Constants.STREAM_PROVIDER);
+            _serverDisconnectedStream = _streamProvider.GetStream<Guid>(State.ServerId, Constants.SERVER_DISCONNECTED);
             var subscriptions = await _serverDisconnectedStream.GetAllSubscriptionHandles();
             var subscriptionTasks = new List<Task>();
             foreach (var subscription in subscriptions)
@@ -96,11 +96,11 @@ namespace SignalR.Orleans.Clients
             {
                 await _clientDisconnectStream.OnNextAsync(_keyData.Id);
             }
+            await ClearStateAsync();
 
             if (_serverDisconnectedSubscription != null)
                 await _serverDisconnectedSubscription.UnsubscribeAsync();
 
-            await ClearStateAsync();
             DeactivateOnIdle();
         }
     }
