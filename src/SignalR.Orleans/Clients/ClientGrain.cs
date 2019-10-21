@@ -28,7 +28,7 @@ namespace SignalR.Orleans.Clients
         private IAsyncStream<Guid> _serverDisconnectedStream;
         private IAsyncStream<string> _clientDisconnectStream;
         private ConnectionGrainKey _keyData;
-        private StreamSubscriptionHandle<Guid> _subscription;
+        private StreamSubscriptionHandle<Guid> _serverDisconnectedSubscription;
         private const int _maxFailAttempts = 3;
         private int _failAttempts;
 
@@ -52,7 +52,7 @@ namespace SignalR.Orleans.Clients
             var subscriptionTasks = new List<Task>();
             foreach (var subscription in subscriptions)
             {
-                subscriptionTasks.Add(subscription.ResumeAsync(async _ => await OnDisconnect()));
+                subscriptionTasks.Add(subscription.ResumeAsync(async _ => await OnDisconnect("server-disconnected")));
             }
             await Task.WhenAll(subscriptionTasks);
         }
@@ -72,7 +72,7 @@ namespace SignalR.Orleans.Clients
             _failAttempts++;
             if (_failAttempts >= _maxFailAttempts)
             {
-                await OnDisconnect();
+                await OnDisconnect("attempts-limit-reached");
                 _logger.LogWarning("Force disconnect client for connectionId {connectionId} and hub {hubName} ({targetMethod}) after exceeding attempts limit",
                     _keyData.Id, _keyData.HubName, message.Target);
             }
@@ -83,20 +83,22 @@ namespace SignalR.Orleans.Clients
             State.ServerId = serverId;
             _serverStream = _streamProvider.GetStream<ClientMessage>(State.ServerId, Constants.SERVERS_STREAM);
             _serverDisconnectedStream = _streamProvider.GetStream<Guid>(State.ServerId, Constants.SERVER_DISCONNECTED);
-            _subscription = await _serverDisconnectedStream.SubscribeAsync(async _ => await OnDisconnect());
+            _serverDisconnectedSubscription = await _serverDisconnectedStream.SubscribeAsync(async _ => await OnDisconnect("server-disconnected"));
             await WriteStateAsync();
         }
 
-        public async Task OnDisconnect()
+        public async Task OnDisconnect(string reason = null)
         {
-            _logger.LogDebug("Disconnecting connectionId {connectionId} from server {serverId}", _keyData.Id, State.ServerId);
+            _logger.LogDebug("Disconnecting connection on {hubName} for connection {connectionId} from server {serverId} via {reason}",
+                _keyData.HubName, _keyData.Id, State.ServerId, reason);
 
             if (_keyData.Id != null)
             {
                 await _clientDisconnectStream.OnNextAsync(_keyData.Id);
             }
 
-            _subscription?.UnsubscribeAsync();
+            if (_serverDisconnectedSubscription != null)
+                await _serverDisconnectedSubscription.UnsubscribeAsync();
 
             await ClearStateAsync();
             DeactivateOnIdle();
