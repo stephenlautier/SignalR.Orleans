@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -15,7 +15,7 @@ namespace SignalR.Orleans
 {
     public class OrleansHubLifetimeManager<THub> : HubLifetimeManager<THub>, IDisposable where THub : Hub
     {
-        private readonly Timer _timer;
+        private Timer _timer;
         private readonly HubConnectionStore _connections = new HubConnectionStore();
         private readonly ILogger _logger;
         private readonly IClusterClientProvider _clusterClientProvider;
@@ -39,14 +39,12 @@ namespace SignalR.Orleans
             _logger = logger;
             _clusterClientProvider = clusterClientProvider;
             _ = EnsureStreamSetup();
-
-            _timer = new Timer(_ => Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(10));
         }
 
         private Task HeartbeatCheck()
         {
             var client = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
-            return client.HeartBeat(_serverId);
+            return client.Heartbeat(_serverId);
         }
 
         private async Task EnsureStreamSetup()
@@ -75,6 +73,7 @@ namespace SignalR.Orleans
             _streamProvider = _clusterClientProvider.GetClient().GetStreamProvider(Constants.STREAM_PROVIDER);
             _serverStream = _streamProvider.GetStream<ClientMessage>(_serverId, Constants.SERVERS_STREAM);
             _allStream = _streamProvider.GetStream<AllMessage>(Constants.ALL_STREAM_ID, Utils.BuildStreamHubName(_hubName));
+            _timer = new Timer(_ => Task.Run(HeartbeatCheck), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(10));
 
             var subscribeTasks = new List<Task>
             {
