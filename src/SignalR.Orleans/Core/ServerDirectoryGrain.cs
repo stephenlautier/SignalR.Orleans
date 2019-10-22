@@ -77,7 +77,6 @@ namespace SignalR.Orleans.Core
 
             if (expiredServers.Count > 0)
                 await WriteStateAsync();
-
         }
     }
 }

@@ -52,7 +52,7 @@ namespace SignalR.Orleans.Clients
             var subscriptionTasks = new List<Task>();
             foreach (var subscription in subscriptions)
             {
-                subscriptionTasks.Add(subscription.ResumeAsync(async _ => await OnDisconnect("server-disconnected")));
+                subscriptionTasks.Add(subscription.ResumeAsync(async (serverId, _) => await OnDisconnect("server-disconnected")));
             }
             await Task.WhenAll(subscriptionTasks);
         }
