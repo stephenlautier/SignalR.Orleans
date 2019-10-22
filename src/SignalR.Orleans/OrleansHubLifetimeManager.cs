@@ -275,7 +275,7 @@ namespace SignalR.Orleans
 
             Task.WaitAll(toUnsubscribe.ToArray());
 
-            _timer?.Dispose();
+            _timer?.Dispose(); 
         }
     }
 
