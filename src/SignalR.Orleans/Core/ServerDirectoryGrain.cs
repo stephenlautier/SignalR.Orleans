@@ -11,8 +11,8 @@ namespace SignalR.Orleans.Core
 {
     public interface IServerDirectoryGrain : IGrainWithIntegerKey
     {
-        Task HeartBeat(Guid serverId);
-        Task Dispose(Guid serverId);
+        Task Heartbeat(Guid serverId);
+        Task Unregister(Guid serverId);
     }
 
     public class ServerDirectoryState
@@ -36,7 +36,8 @@ namespace SignalR.Orleans.Core
         {
             _streamProvider = GetStreamProvider(Constants.STREAM_PROVIDER);
 
-            _logger.LogInformation("Available servers {serverIds} ", string.Join(", ", State.Servers));
+            _logger.LogInformation("Available servers {serverIds}",
+                string.Join(", ", State.Servers?.Count > 0 ? string.Join(", ", State.Servers) : "empty"));
 
             RegisterTimer(
                ValidateAndCleanUp,
@@ -47,18 +48,18 @@ namespace SignalR.Orleans.Core
             await base.OnActivateAsync();
         }
 
-        public Task HeartBeat(Guid serverId)
+        public Task Heartbeat(Guid serverId)
         {
             State.Servers[serverId] = DateTime.UtcNow;
             return WriteStateAsync();
         }
 
-        public async Task Dispose(Guid serverId)
+        public async Task Unregister(Guid serverId)
         {
             if (!State.Servers.ContainsKey(serverId))
                 return;
 
-            _logger.LogWarning("Disposing and removing server {serverId}", serverId);
+            _logger.LogWarning("Unregister server {serverId}", serverId);
             State.Servers.Remove(serverId);
             await WriteStateAsync();
         }
@@ -77,7 +78,6 @@ namespace SignalR.Orleans.Core
 
             if (expiredServers.Count > 0)
                 await WriteStateAsync();
-
         }
     }
 }
