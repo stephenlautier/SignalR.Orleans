@@ -271,7 +271,7 @@ namespace SignalR.Orleans
             }
 
             var serverDirectoryGrain = _clusterClientProvider.GetClient().GetServerDirectoryGrain();
-            toUnsubscribe.Add(serverDirectoryGrain.Dispose(_serverId));
+            toUnsubscribe.Add(serverDirectoryGrain.Unregister(_serverId));
 
             Task.WaitAll(toUnsubscribe.ToArray());
 
