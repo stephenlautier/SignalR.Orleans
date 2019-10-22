@@ -92,7 +92,7 @@ namespace SignalR.Orleans.Core
             return Task.FromResult(State.Connections.Count);
         }
 
-        private Task SendAll(Immutable<InvocationMessage> message, IReadOnlyCollection<string> connections)
+        protected Task SendAll(Immutable<InvocationMessage> message, IReadOnlyCollection<string> connections)
         {
             _logger.LogDebug("Sending message to {hubName}.{targetMethod} on group {groupId} to {connectionsCount} connection(s)",
                 KeyData.HubName, message.Value.Target, KeyData.Id, connections.Count);

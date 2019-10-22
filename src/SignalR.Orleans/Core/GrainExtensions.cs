@@ -32,7 +32,7 @@ namespace Orleans
         }
 
         /// <summary>
-        /// Invokes a method on the hub.
+        /// Invokes a method on the hub (one way).
         /// </summary>
         /// <param name="grain"></param>
         /// <param name="methodName">Target method name to invoke.</param>
